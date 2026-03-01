@@ -1015,13 +1015,19 @@ CHANGES MADE:
                 with self.db.no_autoflush:
                     podcast = self.db.query(Podcast).filter_by(feed_url=sub["feed_url"]).first()
                     if not podcast:
+                        active = sub.get("active", True)
                         podcast = Podcast(
                             title=sub["title"],
                             author=sub["author"],
                             feed_url=sub["feed_url"],
-                            muted=False,
+                            muted=not active,
                         )
                         self.db.add(podcast)
+                        self.db.commit()
+                    else:
+                        # Sync active status from feed source to database
+                        active = sub.get("active", True)
+                        podcast.muted = not active
                         self.db.commit()
 
                     # Skip muted podcasts

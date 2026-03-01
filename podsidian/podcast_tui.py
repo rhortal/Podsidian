@@ -1,5 +1,7 @@
 import os
 import sys
+import tty
+import termios
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 
@@ -11,7 +13,6 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import VSplit, HSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.layout.menus import MenuContainer, MenuItem
 from prompt_toolkit.widgets import Label, Frame, TextArea, Button
 from prompt_toolkit.styles import Style
 from rich.console import Console
@@ -92,7 +93,7 @@ class PodcastListTUI:
         # Table header
         table = Table(show_header=True, header_style="bold magenta", box=None)
         table.add_column("#", style="dim", width=4)
-        table.add_column("Status", width=8)
+        table.add_column("Status", width=10)
         table.add_column("Podcast", style="cyan")
         table.add_column("Author", style="green")
 
@@ -136,8 +137,8 @@ class PodcastListTUI:
         self.console.print("  [cyan]q[/cyan]              Quit")
 
     def _get_input(self) -> str:
-        """Get user input (simple version using input())."""
-        return input("\n> ").strip().lower()
+        """Get single keypress input."""
+        return _get_keypress()
 
     def _move_up(self):
         """Move selection up."""
@@ -287,6 +288,36 @@ class PodcastListTUI:
                 self.console.print(f"[yellow]{e}[/yellow]")
 
         self._load_podcasts()
+
+
+def _get_keypress() -> str:
+    """Read a single keypress and return its meaning."""
+    if not sys.stdin.isatty():
+        return input().strip().lower()
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            seq = sys.stdin.read(2)
+            if seq == "[A":
+                return "up"
+            elif seq == "[B":
+                return "down"
+            elif seq == "[C":
+                return "right"
+            elif seq == "[D":
+                return "left"
+            return ""
+        elif ch == "\r":
+            return "enter"
+        elif ch == " ":
+            return " "
+        return ch.lower()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def run_podcast_manager():

@@ -79,6 +79,7 @@ class LocalFeedsSource(FeedSource):
         for podcast in data.get("podcast", []):
             title = podcast.get("title")
             feed_url = podcast.get("feed_url")
+            active = podcast.get("active", True)
 
             if not title or not feed_url:
                 continue
@@ -88,6 +89,7 @@ class LocalFeedsSource(FeedSource):
                     "title": title,
                     "author": podcast.get("author", ""),
                     "feed_url": feed_url,
+                    "active": active,
                 }
             )
 

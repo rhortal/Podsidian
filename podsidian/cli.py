@@ -597,7 +597,7 @@ def episodes(ratings, filter_tier):
     session = get_db_session()
     from .models import Episode, Podcast
 
-    query = session.query(Episode).join(Podcast)
+    query = session.query(Episode).join(Podcast).filter(Podcast.muted == False)
 
     # Apply tier filter if specified
     if filter_tier:
@@ -702,6 +702,10 @@ def ingest(lookback, debug):
             click.echo(
                 f"\n[{current}/{total}] Processing podcast: {click.style(current_podcast, fg='blue', bold=True)}"
             )
+
+        elif stage == "skip":
+            message = info.get("message", "Skipping podcast")
+            click.echo(f"  {click.style('→', fg='yellow')} {message}")
 
         elif stage == "episodes_found":
             podcast = info["podcast"]
