@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+from rich.console import Console
 from .cost_tracker import format_cost_summary
 
 from .models import init_db, Podcast
@@ -176,6 +177,219 @@ def init():
 def subscriptions():
     """Manage podcast subscriptions."""
     pass
+
+
+@cli.group()
+def podcasts():
+    """Manage local podcast feeds (interactive TUI)."""
+    pass
+
+
+@podcasts.command(name="manage")
+def manage_podcasts():
+    """Open interactive TUI to manage podcast feeds.
+
+    Features:
+    - View all configured podcasts
+    - Toggle active/inactive with Space
+    - Edit podcast details with Enter
+    - Delete with d
+    - Add new podcasts with search (a)
+    - Refresh list (r)
+    - Quit (q)
+    """
+    from .podcast_tui import run_podcast_manager
+
+    try:
+        run_podcast_manager()
+    except ImportError as e:
+        click.echo(f"Error: Missing dependency - {e}", err=True)
+        click.echo("Install required package: pip install prompt-toolkit rich")
+        raise click.Abort()
+
+
+@podcasts.command(name="list")
+def list_local_podcasts():
+    """List all podcasts from local feeds file."""
+    from .podcast_manager import PodcastManager
+
+    manager = PodcastManager()
+
+    try:
+        podcasts = manager.load_podcasts()
+    except FileNotFoundError:
+        click.echo("No podcasts configured. Use 'podsidian podcasts manage' to add some.")
+        return
+
+    if not podcasts:
+        click.echo("No podcasts in local feeds file.")
+        return
+
+    active_count = sum(1 for p in podcasts if p.active)
+
+    click.echo(f"\nLocal Podcasts ({active_count} active / {len(podcasts)} total):\n")
+
+    for i, podcast in enumerate(podcasts, 1):
+        status = click.style("●", fg="green") if podcast.active else click.style("○", dim=True)
+        click.echo(f"{status} {i}. {podcast.title}")
+        click.echo(f"    {podcast.feed_url}")
+        if podcast.author:
+            click.echo(f"    [dim]{podcast.author}[/dim]")
+        click.echo()
+
+
+@podcasts.command(name="add")
+@click.argument("feed_url")
+@click.option("--title", "-t", help="Podcast title")
+@click.option("--author", "-a", help="Podcast author")
+@click.option("--description", "-d", help="Podcast description")
+def add_podcast(feed_url, title, author, description):
+    """Add a podcast to local feeds by URL.
+
+    FEED_URL: RSS feed URL of the podcast
+
+    Example:
+        podsidian podcasts add https://example.com/feed.xml -t "My Podcast" -a "Host Name"
+    """
+    from .podcast_manager import PodcastManager, PodcastEntry
+
+    manager = PodcastManager()
+
+    # If title not provided, try to fetch from feed
+    if not title:
+        import feedparser
+
+        feed = feedparser.parse(feed_url)
+        if feed.feed:
+            title = feed.feed.get("title", "Unknown")
+            author = author or feed.feed.get("author", "")
+            description = description or feed.feed.get("description", "")[:500]
+        else:
+            click.echo("Error: Could not parse feed. Please provide --title", err=True)
+            raise click.Abort()
+
+    entry = PodcastEntry(
+        title=title,
+        feed_url=feed_url,
+        author=author or "",
+        description=description or "",
+        active=True,
+    )
+
+    try:
+        manager.add_podcast(entry)
+        click.echo(f"Added: {title}")
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+
+
+@podcasts.command(name="search")
+@click.argument("query")
+@click.option("--limit", "-l", default=20, help="Maximum results")
+def search_podcasts(query, limit):
+    """Search for podcasts online and display results.
+
+    QUERY: Search term
+
+    Uses Apple Podcasts, PodcastIndex, and fyyd to find podcasts.
+    """
+    from .podcast_search import PodcastSearcher
+    from rich.table import Table
+
+    console = Console()
+
+    console.print(f"\n[cyan]Searching for:[/cyan] {query}\n")
+
+    searcher = PodcastSearcher(sources=["apple", "podcastindex", "fyyd"])
+    results = searcher.search(query, limit=limit)
+
+    if not results:
+        console.print("[yellow]No results found.[/yellow]")
+        return
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Title", style="cyan")
+    table.add_column("Author", style="green")
+    table.add_column("Source", style="yellow", width=12)
+
+    for i, result in enumerate(results, 1):
+        table.add_row(
+            str(i),
+            result.title[:50],
+            result.author[:30] if result.author else "-",
+            result.source,
+        )
+
+    console.print(table)
+    console.print(
+        f"\n[dim]To add a podcast, note its number and use: podsidian podcasts add <feed_url>[/dim]"
+    )
+
+
+@podcasts.command(name="remove")
+@click.argument("feed_url")
+def remove_podcast(feed_url):
+    """Remove a podcast from local feeds.
+
+    FEED_URL: RSS feed URL of the podcast to remove
+    """
+    from .podcast_manager import PodcastManager
+
+    manager = PodcastManager()
+
+    podcast = manager.get_podcast(feed_url)
+    if not podcast:
+        # Try partial match
+        all_podcasts = manager.load_podcasts()
+        matches = [p for p in all_podcasts if feed_url.lower() in p.feed_url.lower()]
+
+        if len(matches) == 1:
+            feed_url = matches[0].feed_url
+            podcast = matches[0]
+        elif len(matches) > 1:
+            click.echo("Multiple matches found:")
+            for i, p in enumerate(matches, 1):
+                click.echo(f"  {i}. {p.title}")
+                click.echo(f"     {p.feed_url}")
+            click.echo("\nUse the full feed URL to specify which to remove.")
+            return
+        else:
+            click.echo(f"Podcast not found: {feed_url}", err=True)
+            return
+
+    if click.confirm(f"Remove '{podcast.title}'?"):
+        manager.remove_podcast(feed_url)
+        click.echo(f"Removed: {podcast.title}")
+
+
+@podcasts.command(name="toggle")
+@click.argument("feed_url")
+def toggle_podcast(feed_url):
+    """Toggle a podcast's active status.
+
+    FEED_URL: RSS feed URL of the podcast
+    """
+    from .podcast_manager import PodcastManager
+
+    manager = PodcastManager()
+
+    new_status = manager.toggle_podcast(feed_url)
+    if new_status is None:
+        # Try partial match
+        all_podcasts = manager.load_podcasts()
+        matches = [p for p in all_podcasts if feed_url.lower() in p.feed_url.lower()]
+
+        if len(matches) == 1:
+            feed_url = matches[0].feed_url
+            new_status = manager.toggle_podcast(feed_url)
+
+    if new_status is None:
+        click.echo(f"Podcast not found: {feed_url}", err=True)
+        return
+
+    status_str = "active" if new_status else "inactive"
+    click.echo(f"Podcast is now: {status_str}")
 
 
 @subscriptions.command(name="list")
