@@ -4,10 +4,14 @@ Podsidian is a powerful tool that bridges your Apple Podcast subscriptions with 
 
 ## Features
 
-- **Apple Podcast Integration**:
-  - Automatically extracts and processes your Apple Podcast subscriptions
-  - Smart episode filtering with configurable lookback period
-  - Easy subscription management and episode listing
+- **Multiple Feed Sources**:
+  - **Apple Podcasts**: Automatically extracts your Apple Podcast subscriptions (default)
+  - **Local RSS Feeds**: Use your own list of podcast RSS feeds (no Apple Podcasts required)
+  - Pluggable architecture - easy to add new feed sources
+- **Local RSS Feed Management**:
+  - Interactive TUI for managing podcasts (`podsidian podcasts manage`)
+  - Search podcasts via Apple Podcasts, PodcastIndex, and fyyd
+  - Add, remove, toggle active/inactive, edit podcast details
 - **RSS Feed Processing**:
   - Retrieves and parses podcast RSS feeds to discover new episodes
   - Defaults to processing only recent episodes (last 7 days)
@@ -95,6 +99,65 @@ uv pip install -e .
 podsidian init
 ```
 This creates a config file at `~/.config/podsidian/config.toml`
+
+### Feed Source Configuration
+
+Podsidian supports multiple feed sources. Choose between Apple Podcasts or local RSS feeds:
+
+```toml
+[feed_source]
+# Options: "apple_podcasts" (default) or "local"
+type = "local"
+
+# Path to local feeds file (only used when type = "local")
+local_feeds_path = "~/.config/podsidian/feeds.toml"
+```
+
+#### Using Local RSS Feeds
+
+When using `type = "local"`, create your feeds file at `~/.config/podsidian/feeds.toml`:
+
+```toml
+[[podcast]]
+title = "My Favorite Podcast"
+author = "Host Name"
+feed_url = "https://example.com/feed.xml"
+description = "A great podcast about things"
+active = true
+```
+
+#### Managing Podcasts
+
+Use the CLI to manage your podcasts:
+
+```bash
+# Search for podcasts (uses Apple Podcasts, PodcastIndex, fyyd)
+podsidian podcasts search "technology news"
+
+# List local podcasts
+podsidian podcasts list
+
+# Add a podcast by URL
+podsidian podcasts add https://example.com/feed.xml -t "Podcast Title" -a "Author"
+
+# Toggle active/inactive
+podsidian podcasts toggle https://example.com/feed.xml
+
+# Remove a podcast
+podsidian podcasts remove https://example.com/feed.xml
+
+# Interactive TUI (full management)
+podsidian podcasts manage
+```
+
+The TUI lets you:
+- Navigate with ↑/↓ or k/j
+- Toggle active/inactive with Space
+- Edit with Enter
+- Delete with d
+- Add new podcasts with a (search + select)
+- Refresh with r
+- Quit with q
 
 2. Configure settings:
 ```toml
