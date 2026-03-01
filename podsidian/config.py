@@ -21,6 +21,10 @@ WHISPER_MODELS = {
 }
 
 DEFAULT_CONFIG = {
+    "feed_source": {
+        "type": "apple_podcasts",
+        "local_feeds_path": "~/.config/podsidian/feeds.toml",
+    },
     "whisper": {
         "model": "large-v3",
         "language": "",
@@ -188,6 +192,16 @@ class Config:
                 self._merge_configs(base[key], value)
             else:
                 base[key] = value
+
+    @property
+    def feed_source_type(self) -> str:
+        """Get the configured feed source type."""
+        return self.config["feed_source"]["type"]
+
+    @property
+    def local_feeds_path(self) -> str:
+        """Get the configured local feeds file path."""
+        return os.path.expanduser(self.config["feed_source"]["local_feeds_path"])
 
     @property
     def vault_path(self) -> Path:

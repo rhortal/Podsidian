@@ -32,7 +32,7 @@ def get_db_session():
 
 @click.group()
 def cli():
-    """Podsidian - Apple Podcasts to Obsidian Bridge"""
+    """Podsidian - Podcast to Obsidian Bridge"""
     pass
 
 
@@ -109,6 +109,13 @@ def show_config():
         f"  Episodes with Embeddings: {click.style(str(episodes_with_embeddings), fg='blue')}"
     )
 
+    # Feed Source Settings
+    feed_source_items = [
+        ("type", config.feed_source_type),
+        ("local_feeds_path", config.local_feeds_path),
+    ]
+    print_section("Feed Source", feed_source_items)
+
     # Obsidian Settings
     obsidian_items = [("vault_path", config.vault_path), ("template", config.note_template)]
     print_section("Obsidian", obsidian_items)
@@ -167,7 +174,7 @@ def init():
 
 @cli.group()
 def subscriptions():
-    """Manage Apple Podcasts subscriptions."""
+    """Manage podcast subscriptions."""
     pass
 
 
@@ -179,17 +186,18 @@ def subscriptions():
     help="Sort by name (alpha) or episode count (episodes)",
 )
 def list_subscriptions(sort):
-    """List all Apple Podcasts subscriptions."""
-    from .apple_podcasts import get_subscriptions
+    """List all podcast subscriptions."""
+    from .feed_source import get_feed_source
     from .models import Podcast, Episode
     from sqlalchemy import func
 
     session = get_db_session()
 
-    # Get subscriptions from Apple Podcasts
-    subs = get_subscriptions()
+    # Get subscriptions from configured feed source
+    feed_source = get_feed_source(config.feed_source_type)
+    subs = feed_source.get_subscriptions()
     if not subs:
-        click.echo("No Apple Podcasts subscriptions found.")
+        click.echo(f"No subscriptions found from {feed_source.name}.")
         return
 
     # Get episode counts for each podcast
@@ -436,7 +444,7 @@ def episodes(ratings, filter_tier):
 )
 @click.option("--debug", is_flag=True, help="Enable debug output")
 def ingest(lookback, debug):
-    """Process new episodes from Apple Podcasts subscriptions.
+    """Process new episodes from podcast subscriptions.
 
     By default, only processes episodes published in the last 7 days.
     Use --lookback to override this (e.g. --lookback 30 for last 30 days).

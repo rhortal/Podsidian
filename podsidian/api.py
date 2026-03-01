@@ -7,7 +7,9 @@ from datetime import datetime
 
 from .models import Episode, Podcast
 from .core import PodcastProcessor
-from .apple_podcasts import get_subscriptions
+from .feed_source import get_feed_source
+from .config import config
+
 
 # API Models
 class SearchResult(BaseModel):
@@ -17,6 +19,7 @@ class SearchResult(BaseModel):
     similarity: float = Field(..., description="Relevance score (0-100)")
     snippet: str = Field(..., description="Matching transcript snippet")
 
+
 class EpisodeInfo(BaseModel):
     id: int = Field(..., description="Episode ID")
     podcast: str = Field(..., description="Podcast name")
@@ -25,12 +28,14 @@ class EpisodeInfo(BaseModel):
     published_at: datetime = Field(..., description="Publication date")
     has_transcript: bool = Field(..., description="Whether episode has been transcribed")
 
+
 class SubscriptionInfo(BaseModel):
     title: str = Field(..., description="Podcast title")
     author: str = Field(..., description="Podcast author")
     feed_url: str = Field(..., description="RSS feed URL")
     muted: bool = Field(..., description="Whether podcast is muted")
     episode_count: int = Field(..., description="Number of episodes in database")
+
 
 # FastAPI app with documentation
 app = FastAPI(
@@ -49,9 +54,10 @@ app = FastAPI(
         {"name": "discovery", "description": "Discover server capabilities"},
         {"name": "search", "description": "Search through podcast transcripts"},
         {"name": "episodes", "description": "Manage podcast episodes"},
-        {"name": "subscriptions", "description": "Manage podcast subscriptions"}
-    ]
+        {"name": "subscriptions", "description": "Manage podcast subscriptions"},
+    ],
 )
+
 
 def create_api(db_session: Session):
     processor = PodcastProcessor(db_session)
@@ -66,7 +72,7 @@ def create_api(db_session: Session):
             "serverInfo": {
                 "name": "Podsidian MCP",
                 "version": "1.0.0",
-                "capabilities": ["search", "transcribe", "summarize"]
+                "capabilities": ["search", "transcribe", "summarize"],
             }
         }
 
@@ -91,43 +97,43 @@ def create_api(db_session: Session):
                         "parameters": {
                             "query": "Search query string",
                             "limit": "Maximum results (default: 10)",
-                            "relevance": "Minimum score 0-100 (default: 25)"
-                        }
+                            "relevance": "Minimum score 0-100 (default: 25)",
+                        },
                     },
                     "keyword": {
                         "endpoint": "/api/v1/search/keyword",
                         "description": "Search transcripts for exact matches",
                         "parameters": {
                             "keyword": "Text to search for",
-                            "limit": "Maximum results (default: 10)"
-                        }
-                    }
+                            "limit": "Maximum results (default: 10)",
+                        },
+                    },
                 },
                 "episodes": {
                     "list": {
                         "endpoint": "/api/v1/episodes",
-                        "description": "List processed episodes"
+                        "description": "List processed episodes",
                     },
                     "get": {
                         "endpoint": "/api/v1/episodes/{episode_id}",
-                        "description": "Get episode details and transcript"
-                    }
+                        "description": "Get episode details and transcript",
+                    },
                 },
                 "subscriptions": {
                     "list": {
                         "endpoint": "/api/v1/subscriptions",
-                        "description": "List podcast subscriptions"
+                        "description": "List podcast subscriptions",
                     },
                     "mute": {
                         "endpoint": "/api/v1/subscriptions/{title}/mute",
-                        "description": "Mute a podcast"
+                        "description": "Mute a podcast",
                     },
                     "unmute": {
                         "endpoint": "/api/v1/subscriptions/{title}/unmute",
-                        "description": "Unmute a podcast"
-                    }
-                }
-            }
+                        "description": "Unmute a podcast",
+                    },
+                },
+            },
         }
 
     @app.get("/api/v1/search/semantic", response_model=List[SearchResult], tags=["search"])
@@ -151,8 +157,8 @@ def create_api(db_session: Session):
 
         # Convert similarities to percentages and rename excerpt to snippet
         for result in results:
-            result['similarity'] = int(result['similarity'] * 100)
-            result['snippet'] = result.pop('excerpt', '')
+            result["similarity"] = int(result["similarity"] * 100)
+            result["snippet"] = result.pop("excerpt", "")
 
         return results
 
@@ -170,9 +176,12 @@ def create_api(db_session: Session):
             List of transcript segments containing the keyword
         """
         # implement simple keyword search using database query
-        episodes = db_session.query(Episode).filter(
-            Episode.transcript.ilike(f"%{keyword}%")
-        ).limit(limit).all()
+        episodes = (
+            db_session.query(Episode)
+            .filter(Episode.transcript.ilike(f"%{keyword}%"))
+            .limit(limit)
+            .all()
+        )
 
         results = []
         for episode in episodes:
@@ -195,13 +204,15 @@ def create_api(db_session: Session):
                 if end < len(transcript):
                     excerpt = excerpt + "..."
 
-                results.append({
-                    'podcast': episode.podcast.title,
-                    'episode': episode.title,
-                    'published_at': episode.published_at,
-                    'similarity': 100,  # exact match
-                    'snippet': excerpt
-                })
+                results.append(
+                    {
+                        "podcast": episode.podcast.title,
+                        "episode": episode.title,
+                        "published_at": episode.published_at,
+                        "similarity": 100,  # exact match
+                        "snippet": excerpt,
+                    }
+                )
 
         return results
 
@@ -219,18 +230,25 @@ def create_api(db_session: Session):
         Returns:
             List of episode information
         """
-        episodes = db_session.query(Episode).order_by(
-            Episode.published_at.desc()
-        ).offset(offset).limit(limit).all()
+        episodes = (
+            db_session.query(Episode)
+            .order_by(Episode.published_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
-        return [{
-            'id': episode.id,
-            'podcast': episode.podcast.title,
-            'title': episode.title,
-            'description': episode.description,
-            'published_at': episode.published_at,
-            'has_transcript': episode.transcript is not None
-        } for episode in episodes]
+        return [
+            {
+                "id": episode.id,
+                "podcast": episode.podcast.title,
+                "title": episode.title,
+                "description": episode.description,
+                "published_at": episode.published_at,
+                "has_transcript": episode.transcript is not None,
+            }
+            for episode in episodes
+        ]
 
     @app.get("/api/v1/episodes/{episode_id}", response_model=Dict, tags=["episodes"])
     def get_episode(episode_id: int) -> Dict:
@@ -250,38 +268,36 @@ def create_api(db_session: Session):
             raise HTTPException(status_code=404, detail="Episode not found")
 
         return {
-            'id': episode.id,
-            'podcast': episode.podcast.title,
-            'title': episode.title,
-            'description': episode.description,
-            'published_at': episode.published_at,
-            'transcript': episode.transcript
+            "id": episode.id,
+            "podcast": episode.podcast.title,
+            "title": episode.title,
+            "description": episode.description,
+            "published_at": episode.published_at,
+            "transcript": episode.transcript,
         }
 
     @app.get("/api/v1/subscriptions", response_model=List[SubscriptionInfo], tags=["subscriptions"])
     def list_subscriptions() -> List[Dict]:
         """List all podcast subscriptions with their mute state.
 
-        Returns information about all podcasts you're subscribed to in Apple Podcasts,
+        Returns information about all podcasts you're subscribed to,
         along with their mute state in Podsidian.
 
         Returns:
             List of subscription information
         """
-        # Get subscriptions from Apple Podcasts
-        subs = get_subscriptions()
+        # Get subscriptions from configured feed source
+        feed_source = get_feed_source(config.feed_source_type)
+        subs = feed_source.get_subscriptions()
         if not subs:
             return []
 
         # Ensure all podcasts exist in database
         for sub in subs:
-            podcast = db_session.query(Podcast).filter_by(feed_url=sub['feed_url']).first()
+            podcast = db_session.query(Podcast).filter_by(feed_url=sub["feed_url"]).first()
             if not podcast:
                 podcast = Podcast(
-                    title=sub['title'],
-                    author=sub['author'],
-                    feed_url=sub['feed_url'],
-                    muted=False
+                    title=sub["title"], author=sub["author"], feed_url=sub["feed_url"], muted=False
                 )
                 db_session.add(podcast)
         db_session.commit()
@@ -291,18 +307,24 @@ def create_api(db_session: Session):
 
         # get episode counts for each podcast
         from sqlalchemy import func
-        episode_counts = dict(db_session.query(
-            Podcast.feed_url,
-            func.count(Episode.id).label('count')
-        ).join(Episode, isouter=True).group_by(Podcast.feed_url).all())
 
-        return [{
-            'title': sub['title'],
-            'author': sub['author'],
-            'feed_url': sub['feed_url'],
-            'muted': muted_feeds.get(sub['feed_url'], False),
-            'episode_count': episode_counts.get(sub['feed_url'], 0)
-        } for sub in subs]
+        episode_counts = dict(
+            db_session.query(Podcast.feed_url, func.count(Episode.id).label("count"))
+            .join(Episode, isouter=True)
+            .group_by(Podcast.feed_url)
+            .all()
+        )
+
+        return [
+            {
+                "title": sub["title"],
+                "author": sub["author"],
+                "feed_url": sub["feed_url"],
+                "muted": muted_feeds.get(sub["feed_url"], False),
+                "episode_count": episode_counts.get(sub["feed_url"], 0),
+            }
+            for sub in subs
+        ]
 
     @app.post("/api/v1/subscriptions/{title}/mute", response_model=Dict, tags=["subscriptions"])
     def mute_subscription(title: str) -> Dict:
@@ -327,10 +349,10 @@ def create_api(db_session: Session):
         db_session.commit()
 
         return {
-            'title': podcast.title,
-            'author': podcast.author,
-            'feed_url': podcast.feed_url,
-            'muted': True
+            "title": podcast.title,
+            "author": podcast.author,
+            "feed_url": podcast.feed_url,
+            "muted": True,
         }
 
     @app.post("/api/v1/subscriptions/{title}/unmute", response_model=Dict, tags=["subscriptions"])
@@ -354,10 +376,10 @@ def create_api(db_session: Session):
         db_session.commit()
 
         return {
-            'title': podcast.title,
-            'author': podcast.author,
-            'feed_url': podcast.feed_url,
-            'muted': False
+            "title": podcast.title,
+            "author": podcast.author,
+            "feed_url": podcast.feed_url,
+            "muted": False,
         }
 
     return app

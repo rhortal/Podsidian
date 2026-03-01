@@ -26,8 +26,8 @@ from sqlalchemy.orm import Session
 
 from .models import Episode, Podcast
 from .core import PodcastProcessor
-from .apple_podcasts import get_subscriptions
-from .config import get_database_session
+from .feed_source import get_feed_source
+from .config import get_database_session, config
 
 # Logger will be configured in main() after parsing arguments
 logger = logging.getLogger("mcp_stdio")
@@ -400,10 +400,11 @@ class MCPServer:
             return response_text
 
         elif name == "list_subscriptions":
-            # Get subscriptions from Apple Podcasts
-            subs = get_subscriptions()
+            # Get subscriptions from configured feed source
+            feed_source = get_feed_source(config.feed_source_type)
+            subs = feed_source.get_subscriptions()
             if not subs:
-                return "No podcast subscriptions found in Apple Podcasts."
+                return f"No podcast subscriptions found from {feed_source.name}."
 
             # Ensure all podcasts exist in database
             for sub in subs:
@@ -500,7 +501,8 @@ class MCPServer:
 
         elif uri == "podsidian://subscriptions":
             # Get subscription count
-            subs = get_subscriptions()
+            feed_source = get_feed_source(config.feed_source_type)
+            subs = feed_source.get_subscriptions()
             return f"Podcast subscriptions: {len(subs) if subs else 0} subscriptions found"
 
         else:

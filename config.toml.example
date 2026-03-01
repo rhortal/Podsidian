@@ -1,5 +1,19 @@
 # Podsidian Configuration
 
+[feed_source]
+# Feed source type: "apple_podcasts" or "local"
+# - "apple_podcasts": Read subscriptions from Apple Podcasts app (default)
+# - "local": Read subscriptions from a local TOML file
+type = "apple_podcasts"
+
+# Path to local feeds file (only used when type = "local")
+# This file should contain your podcast subscriptions in TOML format:
+#   [[podcast]]
+#   title = "My Favorite Podcast"
+#   author = "Host Name"
+#   feed_url = "https://example.com/feed.xml"
+local_feeds_path = "~/.config/podsidian/feeds.toml"
+
 [obsidian]
 # Path to your Obsidian vault
 vault_path = "~/Documents/Obsidian"

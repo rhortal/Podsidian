@@ -13,7 +13,6 @@ from typing import Optional, List, Dict, Tuple
 from sqlalchemy.orm import Session
 
 from .models import Podcast, Episode
-from .apple_podcasts import get_subscriptions
 
 
 class PodcastProcessor:
@@ -23,11 +22,26 @@ class PodcastProcessor:
         self.embedding_model = None
         self.annoy_index = None
         self.episode_map = {}  # Maps Annoy index to Episode ID
+        self._feed_source = None
 
         # Import here to avoid circular imports
         from .config import config
 
         self.config = config
+
+    def _get_feed_source(self):
+        """Get the configured feed source, creating it if necessary."""
+        if self._feed_source is None:
+            source_type = self.config.feed_source_type
+            if source_type == "local":
+                from .local_feeds import LocalFeedsSource
+
+                self._feed_source = LocalFeedsSource(self.config.local_feeds_path)
+            else:
+                from .apple_podcasts import ApplePodcastsFeedSource
+
+                self._feed_source = ApplePodcastsFeedSource()
+        return self._feed_source
 
     def _load_whisper(self):
         """Lazy load whisper model with configured options."""
@@ -146,7 +160,9 @@ class PodcastProcessor:
             cmd.extend(["--model-path", model_path])
         else:
             # Let WhisperKit download the model using repo format
-            cmd.extend(["--model", f"argmaxinc/whisperkit-coreml_whisper-{model_name}"])
+            # Use empty prefix since model name already includes "whisper"
+            cmd.extend(["--model-prefix", ""])
+            cmd.extend(["--model", f"argmaxinc/whisperkit-coreml-{model_name}"])
 
         # Add language if specified
         if language:
@@ -975,7 +991,8 @@ CHANGES MADE:
         from datetime import datetime, timedelta
 
         cutoff_date = datetime.now() - timedelta(days=lookback_days)
-        subscriptions = get_subscriptions()
+        feed_source = self._get_feed_source()
+        subscriptions = feed_source.get_subscriptions()
 
         # Initial stats
         if progress_callback:

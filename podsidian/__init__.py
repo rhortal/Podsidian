@@ -1,5 +1,12 @@
-from .cli import cli
-
 __version__ = "1.1.0"
 
-__all__ = ['cli']
+
+def __getattr__(name):
+    if name == "cli":
+        from .cli import cli
+
+        return cli
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = ["cli"]
